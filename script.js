@@ -47,11 +47,13 @@ const account2 = {
 
 const account3 = {
   owner: 'cent cc',
-  movements: [200, -200, 11340, -300, -20],
+  movements: [111,320, 200, -200, 140, -300, -20],
   interestRate: 0.7,
   pin: 3,
   currency: 'KRW',
   movementsDates: [
+    '2024-02-11T12:05:03.301Z',
+    '2024-02-12T12:05:03.301Z',
     '2022-11-01T13:15:33.035Z',
     '2022-11-30T09:48:16.867Z',
     '2023-12-25T06:04:23.907Z',
@@ -62,7 +64,6 @@ const account3 = {
 };
 
 const accounts = [account1, account2, account3];
-
 // Elements
 const labelWelcome = document.querySelector('.welcome');
 const labelDate = document.querySelector('.date');
@@ -111,18 +112,23 @@ const formattedDate = (date, locale) => {
   };
   return new Intl.DateTimeFormat(locale, option).format(date);
 }
-const formattedCur = (locale, currency, money) => {
+const formattedCur = (locale, currency, value) => {
   const option = {
-    style: 'currency',
+    style: 'currency', // unit(celsius, mile per hour, kilometer, kilogram...), currency, percent
+    unit:'celsius',
     currency: currency,
+    // grouping: false
   }
-  return new Intl.NumberFormat(locale, option).format(money)
+  return new Intl.NumberFormat(locale, option).format(value)
 };
 
 const calcDates = function (date) {
+
   const currDate = new Date().getTime();
+
   const destDate = new Date(date).getTime();
   const daysPassed = Math.floor((currDate - destDate)/(1000*60*60*24))
+
   if (daysPassed <= 1 ) return 'today';
   if(daysPassed === 2) return 'Yesterday';
   if(daysPassed <= 7) return `${daysPassed} days passed`;
@@ -145,8 +151,6 @@ const displayMovements = function(acc, sort = false) {
 
   movs.forEach(function(mov, idx) {
     const type = mov > 0 ? 'deposit': 'withdrawal';
-    const newDate = new Date(acc.movementsDates[idx]);
-    console.log('acc mov dates ; ',newDate);
 
     const html = `
      <div class="movements__row">
@@ -191,32 +195,38 @@ btnSort.addEventListener('click', function(e) {
   sortToggle = !sortToggle;
   rowColor();
 });
+
 // set timer
-let currentSecond;
-let playTimer;
-const timer = function() {
-  currentSecond = 300;
-  playTimer = setInterval(() => {
-    currentSecond = currentSecond - 1;
+let timer, currentAccount;
+
+const startLogOutTimer = function() {
+
+  const tick = () => {
+    const minType = Math.floor(currentSecond / 60).toString().padStart(2, '0')
     const secType = (currentSecond % 60).toString().padStart(2,'0');
 
-    if (currentSecond < 0) {
+    labelTimer.textContent = `${minType}:${secType}`;
+
+    if (currentSecond === 0) {
       containerApp.style.opacity = 0;
-      clearInterval(playTimer);
+      clearInterval(timer);
+      labelWelcome.textContent = 'Log in to get started';
       // clearMovementsRow();
-    } else {
-      labelTimer.textContent = `${Math.floor(currentSecond / 60)}:${secType}`;
     }
-  }, 1000);
+    currentSecond--;
+  }
+
+  let currentSecond = 25;
+  // tick();
+  return setInterval(tick, 1000);
 };
 
 //Event handler
-let currentAccount;
 btnLogin.addEventListener('click', function(e) {
   e.preventDefault();
   if (currentAccount !== null) {
-    clearInterval(playTimer);
-    currentSecond = 300;
+    // clearInterval(timer);
+    // currentSecond = 300;
     document.querySelectorAll('.movements__row')
       .forEach(v => v.remove());
   }
@@ -229,13 +239,22 @@ btnLogin.addEventListener('click', function(e) {
     inputLoginPin.value = inputLoginUsername.value = '';
     // inputLoginUsername.focus()
 
+    if(timer) clearInterval(timer)
+    timer = startLogOutTimer();
+
     updateUI(currentAccount);
-    timer();
     rowColor();
   } else {
     containerApp.style.opacity = '0';
     alert('뭔가 안맞어요!!');
   }
+});
+// logout
+btnLogout.addEventListener('click', (e) => {
+  e.preventDefault();
+  containerMovements.innerHTML = '';
+  containerApp.style.opacity = '0';
+  clearInterval(timer);
 });
 
 // transfer
@@ -243,17 +262,25 @@ btnTransfer.addEventListener('click', function(e) {
   e.preventDefault();
   const transferTo = accounts.find(acc => acc.username === inputTransferTo.value);
   const amount = +(inputTransferAmount.value);
+
+  const tzoffset = (new Date()).getTimezoneOffset() * 60000; //offset in milliseconds
+  const localISOTime = (new Date(Date.now() - tzoffset)).toISOString();
+  console.log(localISOTime)
+
   if (transferTo?.username &&
     amount <= currentAccount.balance &&
     transferTo.username !== currentAccount.username) {
     currentAccount.movements.push(-amount);
-    currentAccount.movementsDates.push(new Date().toISOString());
+    currentAccount.movementsDates.push(localISOTime);
     transferTo.movements.push(+amount);
-    transferTo.movementsDates.push(new Date().toISOString());
+    transferTo.movementsDates.push(localISOTime);
     inputTransferTo.value = '';
     inputTransferAmount.value = '';
+
+    clearInterval(timer);
+    timer = startLogOutTimer();
+
     updateUI(currentAccount);
-    console.log(transferTo)
   }
 });
 
@@ -263,6 +290,10 @@ btnLoan.addEventListener('click', function(ev) {
   if (amount > 0 && currentAccount.movements.some(mov => mov >= amount * 0.1)) {
     currentAccount.movements.push(+amount);
     updateUI(currentAccount);
+
+    clearInterval(timer);
+    timer = startLogOutTimer();
+
     inputLoanAmount.focus();
   }
   inputLoanAmount.value = '';
@@ -285,14 +316,6 @@ btnClose.addEventListener('click', function(e) {
     alert('Wrong id, password 💥');
     inputCloseUsername.value = inputClosePin.value = '';
   }
-});
-// logout
-btnLogout.addEventListener('click', (e) => {
-  e.preventDefault();
-  containerMovements.innerHTML = '';
-  currentSecond = 300;
-  clearInterval(playTimer);
-  containerApp.style.opacity = '0';
 });
 
 function rowColor () {
